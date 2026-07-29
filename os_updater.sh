@@ -43,6 +43,7 @@ if ! timeout 2 bash -c "</dev/tcp/$real_host/$real_port" 2>/dev/null; then
 fi
 
 echo -e "${c_accent} 🔍 Detectant sistema operatiu i host...${c_reset}"
+sleep 1
 # 2. Obtenim tota la info en una sola connexió (super ràpid)
 initial_info=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@$target" "hostname; ip=\$(hostname -I 2>/dev/null | awk '{print \$1}'); echo \"\$ip\"; if command -v apt >/dev/null; then echo apt; elif command -v yum >/dev/null; then echo yum; else echo unknown; fi" 2>/dev/null)
 
@@ -70,6 +71,7 @@ mkdir -p "$dest_dir"
 # 1. DIAGNÒSTIC PREVI
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} 📊 Recopilant dades de diagnòstic PRE-actualització...${c_reset}"
+sleep 1
 diag_pre="/tmp/diag_pre_${target}.txt"
 
 if [ "$pkg_mgr" == "apt" ]; then
@@ -90,6 +92,8 @@ echo -e "${c_success}  ✔ Diagnòstic previ completat i guardat.${c_reset}"
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} ⚙️  Iniciant actualització de sistema...${c_reset}"
 echo -e "${c_dim} (Veuràs la sortida en directe de l'actualització per pantalla)${c_reset}\n"
+sleep 1
+
 
 log_name="log-update-${remote_host}-$(date +%d-%m-%Y_%H-%M-%S).txt"
 if [ "$pkg_mgr" == "apt" ]; then
@@ -104,6 +108,7 @@ ssh -t "root@$target" "$update_cmd"
 # 3. REINICI SI CAL
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} 🔄 Comprovant necessitat de reinici (Kernel/Core)...${c_reset}"
+sleep 1
 needs_reboot="no"
 
 if [ "$pkg_mgr" == "apt" ]; then
@@ -152,11 +157,13 @@ fi
 # 4. DIAGNÒSTIC POST-ACTUALITZACIÓ I COMPARACIÓ (Es fa SEMPRE)
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} 📊 Generant diagnòstic POST-actualització...${c_reset}"
+sleep 1
 diag_post="/tmp/diag_post_${target}.txt"
 ssh "root@$target" "$diag_cmd" > "$diag_post"
 
 echo -e "\n${c_warning} 🔍 COMPARATIVA DE DIAGNÒSTIC (Abans vs Ara) ${c_reset}"
 echo -e "${c_dim} Les línies en - han desaparegut, les en + són noves.${c_reset}"
+sleep 1
 
 # Retallem els fitxers per comparar només des de "[+] Ports" en endavant (ignorant la llista de paquets que es mostraria com a eliminada)
 sed -n '/\[+\] Ports/,$p' "$diag_pre" > "${diag_pre}_clean"
@@ -176,6 +183,7 @@ echo -e "${c_dim} (Si no surt res, vol dir que el kernel, ports, processos i con
 # 5. NETEJA DE PAQUETS
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} 🧹 Netejant paquets sobrants (Autoremove)...${c_reset}"
+sleep 1
 if [ "$pkg_mgr" == "apt" ]; then
     ssh -t "root@$target" "DEBIAN_FRONTEND=noninteractive apt-get autoremove -y"
 else
@@ -186,6 +194,7 @@ echo -e "${c_success}  ✔ Neteja de la MV completada.${c_reset}"
 # 6. RECOLLIDA DEL LOG
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} 📥 Descarregant log al teu PC...${c_reset}"
+sleep 1
 err_file=$(mktemp)
 scp -q "root@${target}:/root/$log_name" "$dest_dir/" 2> "$err_file"
 scp_exit=$?
@@ -206,6 +215,7 @@ rm -f "$err_file"
 echo -e "\n${c_main}╭──────────────────────────────────────────────────╮${c_reset}"
 echo -e "${c_main}│${c_success}             🎯 PROCÉS COMPLETAT!               ${c_main}│${c_reset}"
 echo -e "${c_main}╰──────────────────────────────────────────────────╯${c_reset}"
+sleep 1
 echo -e "${c_warning}  [ SEGÜENTS PASSOS ]${c_reset}"
 echo -e "  1. Revisar errors a la comparativa i obrir ticket si cal."
 echo -e "  2. Enviar correu al client (plantilla) amb el log adjunt."
