@@ -12,7 +12,7 @@ c_reset="\e[0m"
 
 clear
 echo -e "${c_main}╭──────────────────────────────────────────────────╮${c_reset}"
-echo -e "${c_main}│${c_accent}            🚀 OS UPDATER PRO V1.0                ${c_main}│${c_reset}"
+echo -e "${c_main}│${c_accent}             🚀 LINUX OS UPDATER V1.0             ${c_main}│${c_reset}"
 echo -e "${c_main}╰──────────────────────────────────────────────────╯${c_reset}"
 echo -e ""
 

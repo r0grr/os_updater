@@ -1,4 +1,4 @@
-# OS Updater Pro
+# Linux OS Updater
 
 [🇬🇧 English](#-english) | [🇪🇸 Español](#-español) | [🏴󠁥󠁳󠁣󠁴󠁿 Català](#-català)
 
