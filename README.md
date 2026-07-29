@@ -34,6 +34,27 @@ Eina automatitzada per a l'actualització segura de servidors Linux en entorns d
    ./os_updater.sh srv-web-client
    ```
 
+3. **Crear un Àlies Global (Recomanat)**
+   Per poder executar l'eina escrivint només `update` des de qualsevol carpeta sense haver de buscar on està l'script, pots crear un àlies al teu terminal. Assegura't de posar la ruta on hagis descarregat el repositori:
+
+   **Per a Bash (`~/.bashrc`):**
+   ```bash
+   echo "alias update='~/Scripts/os_updater/os_updater.sh'" >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+   **Per a Zsh (`~/.zshrc`):**
+   ```bash
+   echo "alias update='~/Scripts/os_updater/os_updater.sh'" >> ~/.zshrc
+   source ~/.zshrc
+   ```
+
+   **Per a Fish Shell:**
+   ```fish
+   alias update="~/Scripts/os_updater/os_updater.sh"
+   funcsave update
+   ```
+
 ## 📂 On es guarden els logs?
 
 Quan l'actualització s'ha completat, el log complet de l'operació es descarrega automàticament des del servidor remot i s'esborra de la màquina original. Es guardarà de forma local a:
