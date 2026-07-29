@@ -1,4 +1,4 @@
-# Linux OS Updater
+# Remote Linux OS Updater
 
 [🇬🇧 English](#-english) | [🇪🇸 Español](#-español) | [🏴󠁥󠁳󠁣󠁴󠁿 Català](#-català)
 
