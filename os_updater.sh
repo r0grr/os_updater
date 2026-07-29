@@ -12,7 +12,7 @@ c_reset="\e[0m"
 
 clear
 echo -e "${c_main}╭──────────────────────────────────────────────────╮${c_reset}"
-echo -e "${c_main}│${c_accent}           🚀 OS UPDATER PRO V1.0               ${c_main}│${c_reset}"
+echo -e "${c_main}│${c_accent}            🚀 OS UPDATER PRO V1.0                ${c_main}│${c_reset}"
 echo -e "${c_main}╰──────────────────────────────────────────────────╯${c_reset}"
 echo -e ""
 
@@ -213,7 +213,7 @@ rm -f "$err_file"
 
 # FI DE PROCÉS I RECORDATORIS MANUALS
 echo -e "\n${c_main}╭──────────────────────────────────────────────────╮${c_reset}"
-echo -e "${c_main}│${c_success}             🎯 PROCÉS COMPLETAT!               ${c_main}│${c_reset}"
+echo -e "${c_main}│${c_success}              🎯 PROCÉS COMPLETAT!                ${c_main}│${c_reset}"
 echo -e "${c_main}╰──────────────────────────────────────────────────╯${c_reset}"
 sleep 1
 echo -e "${c_warning}  [ SEGÜENTS PASSOS ]${c_reset}"
