@@ -31,9 +31,10 @@ Automated tool for secure Linux server updates in production environments (suppo
    ```
    *The assistant will ask you to enter the IP or hostname of the machine.*
 
-   **Quick alternative:** You can pass the server directly as a parameter:
+   **Quick alternative:** You can pass the server and custom port directly as parameters:
    ```bash
    ./os_updater.sh srv-web-client
+   ./os_updater.sh -p 2222 srv-web-client
    ```
 
 3. **Create a Global Alias (Recommended)**
@@ -88,9 +89,10 @@ Herramienta automatizada para la actualización segura de servidores Linux en en
    ```
    *El asistente te pedirá que introduzcas la IP o el nombre de la máquina.*
 
-   **Alternativa rápida:** Puedes pasarle el servidor directamente por parámetro:
+   **Alternativa rápida:** Puedes pasarle el servidor y un puerto específico directamente:
    ```bash
    ./os_updater.sh srv-web-client
+   ./os_updater.sh -p 2222 srv-web-client
    ```
 
 3. **Crear un Alias Global (Recomendado)**
@@ -145,9 +147,10 @@ Eina automatitzada per a l'actualització segura de servidors Linux en entorns d
    ```
    *L'assistent et demanarà que introdueixis la IP o el nom de la màquina.*
 
-   **Alternativa ràpida:** Pots passar-li el servidor directament per paràmetre:
+   **Alternativa ràpida:** Pots passar-li el servidor i un port específic directament:
    ```bash
    ./os_updater.sh srv-web-client
+   ./os_updater.sh -p 2222 srv-web-client
    ```
 
 3. **Crear un Àlies Global (Recomanat)**

@@ -16,8 +16,24 @@ echo -e "${c_main}│${c_accent}         🚀 REMOTE LINUX OS UPDATER V1.0      
 echo -e "${c_main}╰──────────────────────────────────────────────────╯${c_reset}"
 echo -e ""
 
-# Demanar servidor si no s'ha passat per paràmetre
-target="$1"
+target=""
+custom_port=""
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -p)
+            custom_port="$2"
+            shift 2
+            ;;
+        *)
+            if [ -z "$target" ]; then
+                target="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
 if [ -z "$target" ]; then
     echo -ne " ${c_accent}❯${c_reset} Introdueix el nom de la MV o IP: ${c_main}"
     read target
@@ -32,10 +48,22 @@ fi
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} 📡 Connectant amb $target...${c_reset}"
 
+ssh_port_flag=""
+scp_port_flag=""
+if [ -n "$custom_port" ]; then
+    ssh_port_flag="-p $custom_port"
+    scp_port_flag="-P $custom_port"
+fi
+
 # 1. Comprovació de port (fast ping) usant la config de SSH
-real_host=$(ssh -G "$target" 2>/dev/null | awk '/^hostname / {print $2}')
-real_port=$(ssh -G "$target" 2>/dev/null | awk '/^port / {print $2}')
-[ -z "$real_host" ] && real_host="$target" && real_port=22
+real_host=$(ssh -G $ssh_port_flag "$target" 2>/dev/null | awk '/^hostname / {print $2}')
+if [ -n "$custom_port" ]; then
+    real_port="$custom_port"
+else
+    real_port=$(ssh -G "$target" 2>/dev/null | awk '/^port / {print $2}')
+    [ -z "$real_port" ] && real_port=22
+fi
+[ -z "$real_host" ] && real_host="$target"
 
 if ! timeout 2 bash -c "</dev/tcp/$real_host/$real_port" 2>/dev/null; then
     echo -e "\n${c_error}  ❌ [ ERROR ] $target no respon al port SSH ($real_port).${c_reset}\n"
@@ -45,7 +73,7 @@ fi
 echo -e "${c_accent} 🔍 Detectant sistema operatiu i host...${c_reset}"
 sleep 1
 # 2. Obtenim tota la info en una sola connexió (super ràpid)
-initial_info=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@$target" "hostname; ip=\$(hostname -I 2>/dev/null | awk '{print \$1}'); echo \"\$ip\"; if command -v apt >/dev/null; then echo apt; elif command -v yum >/dev/null; then echo yum; else echo unknown; fi" 2>/dev/null)
+initial_info=$(ssh $ssh_port_flag -o ConnectTimeout=5 -o BatchMode=yes "root@$target" "hostname; ip=\$(hostname -I 2>/dev/null | awk '{print \$1}'); echo \"\$ip\"; if command -v apt >/dev/null; then echo apt; elif command -v yum >/dev/null; then echo yum; else echo unknown; fi" 2>/dev/null)
 
 if [ -z "$initial_info" ]; then
     echo -e "  ${c_error}✖ No s'ha pogut accedir per SSH com a root.${c_reset}"
@@ -85,7 +113,7 @@ fi
 diag_cmd='echo -e "\n[+] Paquets a actualitzar\n"; '"$pkg_mgr_check"'; echo -e "\n[+] Ports\n"; p=$(netstat '"$netstat_flags"' 2>/dev/null | tail -n +3 | sort -t: -k2 -n); [ -z "$p" ] && echo "  (Cap port obert detectat)" || echo "$p"; echo -e "\n[+] Processos\n"; pstree 2>/dev/null; echo -e "\n[+] Kernel\n"; uname -r; echo -e "\n[+] Contenidors\n"; c=$(docker ps -a 2>/dev/null | tail -n +2); [ -z "$c" ] && echo "  (Cap contenidor Docker)" || docker ps -a 2>/dev/null'
 
 # Executar diagnòstic, guardar a local i mostrar per pantalla alhora
-ssh "root@$target" "$diag_cmd" | tee "$diag_pre"
+ssh $ssh_port_flag "root@$target" "$diag_cmd" | tee "$diag_pre"
 echo -e "${c_success}  ✔ Diagnòstic previ completat i guardat.${c_reset}"
 
 # 2. ACTUALITZACIÓ
@@ -96,14 +124,16 @@ sleep 1
 
 
 log_name="log-update-${remote_host}-$(date +%d-%m-%Y_%H-%M-%S).txt"
+local_log_tmp="$dest_dir/update_live_capture.tmp"
+
 if [ "$pkg_mgr" == "apt" ]; then
-    update_cmd="DEBIAN_FRONTEND=noninteractive apt upgrade -y | tee /root/$log_name"
+    update_cmd="DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1 | tee /root/$log_name"
 else
-    update_cmd="yum update -y | tee /root/$log_name"
+    update_cmd="yum update -y 2>&1 | tee /root/$log_name"
 fi
 
-# Usem -t per obrir un terminal interactiu virtual perquè vegis la sortida en directe
-ssh -t "root@$target" "$update_cmd"
+# Usem -t per obrir un terminal interactiu virtual i capturem en directe per si falla el reinici
+ssh -t $ssh_port_flag "root@$target" "$update_cmd" | tee >(sed 's/\r$//' > "$local_log_tmp")
 
 # 3. REINICI SI CAL
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
@@ -113,11 +143,11 @@ needs_reboot="no"
 
 if [ "$pkg_mgr" == "apt" ]; then
     # Busquem al log si s'ha instal·lat algun linux-image o headers, i comprovem també el fitxer oficial de reboot-required d'Ubuntu/Debian
-    reboot_flag=$(ssh "root@$target" "([ -f /var/run/reboot-required ] || grep -iE '(setting up|inst).*(linux-image|linux-headers|linux-modules)-[0-9]' /root/$log_name >/dev/null 2>&1) && echo yes || echo no")
+    reboot_flag=$(ssh $ssh_port_flag "root@$target" "([ -f /var/run/reboot-required ] || grep -iE '(setting up|inst).*(linux-image|linux-headers|linux-modules)-[0-9]' /root/$log_name >/dev/null 2>&1) && echo yes || echo no")
     if [ "$reboot_flag" == "yes" ]; then needs_reboot="yes"; fi
 else
     # Busquem al log de yum/dnf si s'ha tocat el kernel (ignorant colors/ANSI amb .*)
-    reboot_flag=$(ssh "root@$target" "grep -iE '(install|updat|upgrad|instaland|actualizand).*(kernel|kernel-core|kernel-modules)-[0-9]' /root/$log_name >/dev/null 2>&1 && echo yes || echo no")
+    reboot_flag=$(ssh $ssh_port_flag "root@$target" "grep -iE '(install|updat|upgrad|instaland|actualizand).*(kernel|kernel-core|kernel-modules)-[0-9]' /root/$log_name >/dev/null 2>&1 && echo yes || echo no")
     if [ "$reboot_flag" == "yes" ]; then needs_reboot="yes"; fi
 fi
 
@@ -136,19 +166,46 @@ if [ "$needs_reboot" == "yes" ]; then
         fi
     else
         echo -e "${c_accent}  Reiniciant el servidor...${c_reset}"
-        ssh "root@$target" "reboot"
+        ssh $ssh_port_flag "root@$target" "reboot"
         
         echo -e "${c_dim}  Esperant que el servidor es desconnecti...${c_reset}"
         sleep 5
         
-        echo -e "${c_dim}  Esperant que torni a estar online (això pot trigar)...${c_reset}"
-        while ! timeout 2 bash -c "</dev/tcp/$real_host/$real_port" 2>/dev/null; do
+        echo -e "${c_dim}  Esperant que torni a estar online (màxim 60 segons)...${c_reset}"
+        wait_time=0
+        server_up=false
+        while [ $wait_time -lt 60 ]; do
+            if timeout 2 bash -c "</dev/tcp/$real_host/$real_port" 2>/dev/null; then
+                server_up=true
+                break
+            fi
             sleep 3
+            wait_time=$((wait_time + 3))
         done
         
-        # Donar-li un marge al procés SSH i als serveis perquè s'aixequin del tot
-        sleep 10
-        echo -e "${c_success}  ✔ Servidor online de nou!${c_reset}"
+        if [ "$server_up" = true ]; then
+            # Donar-li un marge al procés SSH i als serveis perquè s'aixequin del tot
+            sleep 10
+            echo -e "${c_success}  ✔ Servidor online de nou!${c_reset}"
+        else
+            echo -e "${c_error}  💥 [ ERROR CRÍTIC ] El servidor no ha tornat a respondre després de 60 segons!${c_reset}"
+            echo -e "${c_warning}  És possible que hi hagi hagut un 'Kernel Panic' o s'hagi quedat sense espai.${c_reset}"
+            
+            err_log="$dest_dir/${log_name%.txt}_error.txt"
+            echo "=================================================" > "$err_log"
+            echo "   ERROR CRÍTIC: EL SERVIDOR NO HA REARRENCAT    " >> "$err_log"
+            echo "=================================================" >> "$err_log"
+            echo "Diagnòstic previ a l'actualització:" >> "$err_log"
+            cat "$diag_pre" >> "$err_log"
+            echo -e "\n=================================================" >> "$err_log"
+            echo "Darrer registre d'actualització capturat:" >> "$err_log"
+            cat "$local_log_tmp" >> "$err_log"
+            
+            echo -e "\n${c_success}  S'ha guardat un informe d'error a: ${c_reset}$err_log"
+            echo -e "${c_error}  Tancant el procés de forma segura.${c_reset}"
+            rm -f "$local_log_tmp"
+            exit 1
+        fi
     fi
 else
     echo -e "${c_success}  ✔ No cal reinici.${c_reset}"
@@ -159,7 +216,7 @@ echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄�
 echo -e "${c_accent} 📊 Generant diagnòstic POST-actualització...${c_reset}"
 sleep 1
 diag_post="/tmp/diag_post_${target}.txt"
-ssh "root@$target" "$diag_cmd" > "$diag_post"
+ssh $ssh_port_flag "root@$target" "$diag_cmd" > "$diag_post"
 
 echo -e "\n${c_warning} 🔍 COMPARATIVA DE DIAGNÒSTIC (Abans vs Ara) ${c_reset}"
 echo -e "${c_dim} Les línies en - han desaparegut, les en + són noves.${c_reset}"
@@ -185,9 +242,9 @@ echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄�
 echo -e "${c_accent} 🧹 Netejant paquets sobrants (Autoremove)...${c_reset}"
 sleep 1
 if [ "$pkg_mgr" == "apt" ]; then
-    ssh -t "root@$target" "DEBIAN_FRONTEND=noninteractive apt-get autoremove -y"
+    ssh $ssh_port_flag -t "root@$target" "DEBIAN_FRONTEND=noninteractive apt-get autoremove -y"
 else
-    ssh -t "root@$target" "yum autoremove -y"
+    ssh $ssh_port_flag -t "root@$target" "yum autoremove -y"
 fi
 echo -e "${c_success}  ✔ Neteja de la MV completada.${c_reset}"
 
@@ -196,15 +253,16 @@ echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄�
 echo -e "${c_accent} 📥 Descarregant log al teu PC...${c_reset}"
 sleep 1
 err_file=$(mktemp)
-scp -q "root@${target}:/root/$log_name" "$dest_dir/" 2> "$err_file"
+scp $scp_port_flag -q "root@${target}:/root/$log_name" "$dest_dir/" 2> "$err_file"
 scp_exit=$?
 
 if [ $scp_exit -eq 0 ]; then
     # Si s'ha descarregat correctament, l'esborrem del servidor
-    ssh "root@$target" "rm -f /root/$log_name" >/dev/null 2>&1
+    ssh $ssh_port_flag "root@$target" "rm -f /root/$log_name" >/dev/null 2>&1
     echo -e "    ${c_success}✔${c_reset} $log_name"
     echo -e "${c_success}  ✨ [ ÈXIT ] Log descarregat i eliminat del servidor!${c_reset}"
     echo -e "     ${c_dim}📂 Guardat a:${c_reset} $dest_dir"
+    rm -f "$local_log_tmp"
 else
     echo -e "${c_error}  💥 [ ERROR ] Problema al descarregar el log:${c_reset}"
     cat "$err_file" | sed "s/^/     /"
