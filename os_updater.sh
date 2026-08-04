@@ -174,13 +174,29 @@ if [ "$needs_reboot" == "yes" ]; then
         echo -e "${c_dim}  Esperant que torni a estar online (màxim 60 segons)...${c_reset}"
         wait_time=0
         server_up=false
-        while [ $wait_time -lt 60 ]; do
+        max_wait=60
+        extra_wait_prompted=false
+        
+        while [ $wait_time -lt $max_wait ]; do
             if timeout 2 bash -c "</dev/tcp/$real_host/$real_port" 2>/dev/null; then
                 server_up=true
                 break
             fi
             sleep 3
             wait_time=$((wait_time + 3))
+            
+            if [ "$server_up" = false ] && [ $wait_time -ge 60 ] && [ "$extra_wait_prompted" = false ]; then
+                echo -e "${c_warning}  ⚠️ El servidor porta 60s sense respondre.${c_reset}"
+                echo -ne "  Vols donar-li 30 segons extra de marge? [S/n]: "
+                read -r resp_wait
+                extra_wait_prompted=true
+                if [[ ! "$resp_wait" =~ ^[Nn] ]]; then
+                    echo -e "${c_dim}  Esperant 30 segons addicionals...${c_reset}"
+                    max_wait=90
+                else
+                    break
+                fi
+            fi
         done
         
         if [ "$server_up" = true ]; then
@@ -188,7 +204,7 @@ if [ "$needs_reboot" == "yes" ]; then
             sleep 10
             echo -e "${c_success}  ✔ Servidor online de nou!${c_reset}"
         else
-            echo -e "${c_error}  💥 [ ERROR CRÍTIC ] El servidor no ha tornat a respondre després de 60 segons!${c_reset}"
+            echo -e "${c_error}  💥 [ ERROR CRÍTIC ] El servidor no ha tornat a respondre!${c_reset}"
             echo -e "${c_warning}  És possible que hi hagi hagut un 'Kernel Panic' o s'hagi quedat sense espai.${c_reset}"
             
             err_log="$dest_dir/${log_name%.txt}_error.txt"
