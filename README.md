@@ -13,7 +13,8 @@ Automated tool for secure Linux server updates in production environments (suppo
 - **Pre & Post Diagnostics:** Captures the state of the Kernel, open ports, active processes, and Docker containers before and after updating.
 - **Smart Comparison:** Shows a colorized `diff` of what has exactly changed on the server (ideal for detecting services that failed to start).
 - **Reboot Detection:** Analyzes if the update touched the Kernel or if there was a pending system reboot to warn you.
-- **Auto Cleanup:** Runs `autoremove` post-update to keep disk space clean.
+- **Failure Protection:** Automatically detects package installation/scriptlet errors (RPM scriptlet failures, dpkg errors, etc.) and blocks rebooting if an error occurred to prevent unbootable servers.
+- **Post-Verification Cleanup:** Runs `autoremove` only after rebooting and verifying that post-diagnostics services and ports are fully active.
 - **Log Export:** Downloads a detailed log file in `.txt` format to your local computer to attach to support tickets or customer emails.
 
 ### 🛠️ Prerequisites
@@ -71,7 +72,8 @@ Herramienta automatizada para la actualización segura de servidores Linux en en
 - **Diagnóstico Previo y Posterior:** Captura el estado del Kernel, puertos abiertos, procesos activos y contenedores Docker antes y después de actualizar.
 - **Comparativa Inteligente:** Te muestra un `diff` en color de qué ha cambiado exactamente en el servidor (ideal para detectar servicios que no han arrancado).
 - **Detección de Reinicios:** Analiza si la actualización ha tocado el Kernel o si había un reinicio pendiente en el sistema para avisarte.
-- **Limpieza Automática:** Ejecuta `autoremove` tras la actualización para mantener el espacio limpio.
+- **Protección Antifallos:** Detecta automáticamente errores en la instalación de paquetes o scriptlets (fallos de scriptlet RPM, errores de dpkg, etc.) y bloquea el reinicio si hubo algún error para evitar dejar servidores inoperativos.
+- **Limpieza Post-Verificación:** Ejecuta `autoremove` únicamente tras reiniciar y verificar que los servicios y puertos en el diagnóstico posterior funcionan correctamente.
 - **Exportación de Logs:** Descarga un registro detallado en formato `.txt` a tu ordenador local para adjuntar a tickets de soporte o correos de clientes.
 
 ### 🛠️ Prerrequisitos
@@ -129,7 +131,8 @@ Eina automatitzada per a l'actualització segura de servidors Linux en entorns d
 - **Diagnòstic Previ i Posterior:** Captura l'estat del Kernel, els ports oberts, els processos actius i els contenidors Docker abans i després d'actualitzar.
 - **Comparativa Intel·ligent:** Et mostra un `diff` en color de què ha canviat exactament al servidor (ideal per detectar serveis que no han arrencat correctament).
 - **Detecció de Reinicis:** Analitza si l'actualització ha tocat el Kernel o si hi havia un reinici pendent al sistema per avisar-te.
-- **Neteja Automàtica:** Executa `autoremove` post-actualització per mantenir l'espai net.
+- **Protecció Antifallades:** Detecta automàticament errors en la instal·lació de paquets o scriptlets (fallades d'scriptlet RPM, errors de dpkg, etc.) i bloqueja el reinici si hi ha hagut cap error per evitar deixar servidors inoperatius.
+- **Neteja Post-Verificació:** Executa `autoremove` únicament després de reiniciar i verificar que els serveis i ports en el diagnòstic posterior funcionen correctament.
 - **Exportació de Logs:** Descarrega un registre detallat en format `.txt` al teu ordinador local per adjuntar als tiquets de suport o als correus de clients.
 
 ### 🛠️ Prerequisits
