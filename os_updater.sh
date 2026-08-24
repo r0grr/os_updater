@@ -134,6 +134,48 @@ fi
 
 # Usem -t per obrir un terminal interactiu virtual i capturem en directe per si falla el reinici
 ssh -t $ssh_port_flag "root@$target" "$update_cmd" | tee >(sed 's/\r$//' > "$local_log_tmp")
+update_exit_code=${PIPESTATUS[0]}
+
+# COMPROVACIÓ D'ERRORS CRÍTICS D'ACTUALITZACIÓ (scriptlets RPM, dpkg errors, etc.)
+update_has_error="no"
+error_reason=""
+
+if [ $update_exit_code -ne 0 ]; then
+    update_has_error="yes"
+    error_reason="La comanda d'actualització ($pkg_mgr) ha retornat un codi d'error ($update_exit_code)."
+elif grep -qE -i "(scriptlet failed|Error in POSTTRANS|Error in %posttrans|dpkg: error|Sub-process .* returned an error|No space left on device|Transaction failed|grub2-probe: error|grub-install: error)" "$local_log_tmp"; then
+    update_has_error="yes"
+    error_reason="S'han detectat errors crítics durant la instal·lació de paquets/scriptlets (RPM/dpkg/dracut/GRUB)."
+fi
+
+if [ "$update_has_error" == "yes" ]; then
+    echo -e "\n${c_error}╭─────────────────────────────────────────────────────────────────╮${c_reset}"
+    echo -e "${c_error}│ ❌ [ ERROR CRÍTIC D'ACTUALITZACIÓ DETECTAT ]                    │${c_reset}"
+    echo -e "${c_error}╰─────────────────────────────────────────────────────────────────╯${c_reset}"
+    echo -e "${c_error}  Motiu: $error_reason${c_reset}"
+    echo -e "${c_warning}  ⚠️  PER SEGURETAT, S'HA BLOQUEJAT EL REINICI I L'AUTOREMOVE DOBLANT LA SEGURETAT.${c_reset}"
+    
+    err_log="$dest_dir/${log_name%.txt}_ERROR_ACTUALITZACIO.txt"
+    echo "=================================================" > "$err_log"
+    echo "   ERROR CRÍTIC DURANT L'ACTUALITZACIÓ DE PAQUETS   " >> "$err_log"
+    echo "=================================================" >> "$err_log"
+    echo "Motiu: $error_reason" >> "$err_log"
+    echo -e "\nDiagnòstic previ:" >> "$err_log"
+    cat "$diag_pre" >> "$err_log"
+    echo -e "\n=================================================" >> "$err_log"
+    echo "Registre detallat de l'actualització amb fallada:" >> "$err_log"
+    cat "$local_log_tmp" >> "$err_log"
+    
+    # Intentar copiar el log remot si existeix
+    scp $scp_port_flag -q "root@${target}:/root/$log_name" "$dest_dir/" 2>/dev/null
+    
+    echo -e "\n${c_success}  ✔ S'ha guardat l'informe d'error a:${c_reset} $err_log"
+    echo -e "${c_warning}  📌 Revisa els scriptlets o la configuració de GRUB/dracut/mdadm manualment abans de reiniciar.${c_reset}\n"
+    rm -f "$local_log_tmp"
+    exit 1
+fi
+
+echo -e "${c_success}  ✔ Actualització de paquets finalitzada sense errors.${c_reset}"
 
 # 3. REINICI SI CAL
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
@@ -253,16 +295,22 @@ diff -U 1 "${diag_pre}_clean" "${diag_post}_clean" | grep -E '^\+|^\-' | grep -v
 done
 echo -e "${c_dim} (Si no surt res, vol dir que el kernel, ports, processos i contenidors estan IDÈNTICS)${c_reset}"
 
-# 5. NETEJA DE PAQUETS
+# 5. NETEJA DE PAQUETS (POST-VERIFICACIÓ)
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
-echo -e "${c_accent} 🧹 Netejant paquets sobrants (Autoremove)...${c_reset}"
-sleep 1
-if [ "$pkg_mgr" == "apt" ]; then
-    ssh $ssh_port_flag -t "root@$target" "DEBIAN_FRONTEND=noninteractive apt-get autoremove -y"
+echo -e "${c_accent} 🧹 Neteja de paquets sobrants (Autoremove)...${c_reset}"
+echo -ne "  Vols executar 'autoremove' ara que el sistema està verificat? [S/n]: "
+read -r resp_autoremove
+
+if [[ ! "$resp_autoremove" =~ ^[Nn] ]]; then
+    if [ "$pkg_mgr" == "apt" ]; then
+        ssh $ssh_port_flag -t "root@$target" "DEBIAN_FRONTEND=noninteractive apt-get autoremove -y"
+    else
+        ssh $ssh_port_flag -t "root@$target" "yum autoremove -y"
+    fi
+    echo -e "${c_success}  ✔ Neteja de la MV completada.${c_reset}"
 else
-    ssh $ssh_port_flag -t "root@$target" "yum autoremove -y"
+    echo -e "${c_warning}  S'ha omès la neteja d'autoremove per seguretat.${c_reset}"
 fi
-echo -e "${c_success}  ✔ Neteja de la MV completada.${c_reset}"
 
 # 6. RECOLLIDA DEL LOG
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
