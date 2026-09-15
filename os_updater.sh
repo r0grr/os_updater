@@ -45,6 +45,20 @@ if [ -z "$target" ]; then
     exit 1
 fi
 
+echo -ne "  ${c_warning}⚠️  Has fet una snapshot? [s/N]: ${c_reset}"
+read -r resp_snap1
+if [[ ! "$resp_snap1" =~ ^[SsYy] ]]; then
+    echo -e "\n${c_error}  ❌ Fes la snapshot i llavors torna a executar l'script.${c_reset}\n"
+    exit 1
+fi
+
+echo -ne "  ${c_warning}⚠️  Segona confirmació: Has fet una snapshot? [s/N]: ${c_reset}"
+read -r resp_snap2
+if [[ ! "$resp_snap2" =~ ^[SsYy] ]]; then
+    echo -e "\n${c_error}  ❌ Fes la snapshot i llavors torna a executar l'script.${c_reset}\n"
+    exit 1
+fi
+
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} 📡 Connectant amb $target...${c_reset}"
 
