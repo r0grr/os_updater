@@ -198,7 +198,16 @@ if [ "$needs_reboot" == "yes" ]; then
     echo -ne "  Vols reiniciar el servidor ara mateix? [S/n]: "
     read -r resp_reboot
     
-    if [[ "$resp_reboot" =~ ^[Nn] ]]; then
+    do_reboot=false
+    if [[ ! "$resp_reboot" =~ ^[Nn] ]]; then
+        echo -ne "${c_warning}  ⚠️  Segona confirmació: N'estàs segur que vols reiniciar el servidor ara mateix? [S/n]: ${c_reset}"
+        read -r resp_reboot2
+        if [[ ! "$resp_reboot2" =~ ^[Nn] ]]; then
+            do_reboot=true
+        fi
+    fi
+
+    if [ "$do_reboot" = false ]; then
         echo -e "${c_warning}  S'ha omès el reinici.${c_reset}"
         echo -ne "  Vols continuar amb el següent pas (4. Comprovació post-actualització)? [S/n]: "
         read -r resp_cont
