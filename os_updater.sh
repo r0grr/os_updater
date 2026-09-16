@@ -220,14 +220,14 @@ if [ "$update_has_error" == "yes" ]; then
     scp $scp_port_flag -q "root@${target}:/root/$log_name" "$dest_dir/" 2>/dev/null
     
     echo -e "\n${c_success}  ✔ S'ha guardat l'informe d'error a:${c_reset} $err_log"
-    echo -e "${c_warning}  📌 Revisa els scriptlets o la configuració de GRUB/dracut/mdadm manualment abans de reiniciar.${c_reset}\n"
+    echo -e "${c_warning}  📌 Revisa els errors manualment abans de reiniciar.${c_reset}\n"
     rm -f "$local_log_tmp"
     exit 1
 fi
 
 if [ "$update_has_warning" == "yes" ]; then
     echo -e "\n${c_warning}╭─────────────────────────────────────────────────────────────────╮${c_reset}"
-    echo -e "${c_warning}│ ⚠️  [ AVISOS (WARNS) D'ACTUALITZACIÓ DETECTATS ]                 │${c_reset}"
+    echo -e "${c_warning}│ ⚠️  [ AVISOS (WARNS) D'ACTUALITZACIÓ DETECTATS ]                │${c_reset}"
     echo -e "${c_warning}╰─────────────────────────────────────────────────────────────────╯${c_reset}"
     echo -e "${c_warning}  ⚠️  PER SEGURETAT, S'HA BLOQUEJAT EL REINICI I L'AUTOREMOVE.${c_reset}\n"
     echo -e "${c_warning}  No es permet reiniciar perquè s'han detectat els següents avisos:${c_reset}"
