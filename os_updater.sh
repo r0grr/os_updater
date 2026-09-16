@@ -265,21 +265,44 @@ echo -e "${c_success}  ✔ Actualització de paquets finalitzada sense errors ni
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
 echo -e "${c_accent} 🔄 Comprovant necessitat de reinici (Kernel/Core)...${c_reset}"
 sleep 1
-needs_reboot="no"
-
 if [ "$pkg_mgr" == "apt" ]; then
-    # Busquem al log si s'ha instal·lat algun linux-image o headers, i comprovem també el fitxer oficial de reboot-required d'Ubuntu/Debian
-    reboot_flag=$(ssh $ssh_port_flag "root@$target" "([ -f /var/run/reboot-required ] || grep -iE '(setting up|inst).*(linux-image|linux-headers|linux-modules)-[0-9]' /root/$log_name >/dev/null 2>&1) && echo yes || echo no")
-    if [ "$reboot_flag" == "yes" ]; then needs_reboot="yes"; fi
+    reboot_info=$(ssh $ssh_port_flag "root@$target" '
+        if grep -qiE "(setting up|inst).*(linux-image|linux-headers|linux-modules)-[0-9]" /root/'"$log_name"' 2>/dev/null || ([ -f /var/run/reboot-required ] && [ -f /root/'"$log_name"' ] && [ /var/run/reboot-required -nt /root/'"$log_name"' ]); then
+            echo "session"
+        elif [ -f /var/run/reboot-required ]; then
+            r_date=$(date -r /var/run/reboot-required +"%d/%m/%Y" 2>/dev/null)
+            echo "pending_old:$r_date"
+        else
+            echo "none"
+        fi
+    ')
 else
-    # Busquem al log de yum/dnf si s'ha tocat el kernel (ignorant colors/ANSI amb .*)
-    reboot_flag=$(ssh $ssh_port_flag "root@$target" "grep -iE '(install|updat|upgrad|instaland|actualizand).*(kernel|kernel-core|kernel-modules)-[0-9]' /root/$log_name >/dev/null 2>&1 && echo yes || echo no")
-    if [ "$reboot_flag" == "yes" ]; then needs_reboot="yes"; fi
+    reboot_info=$(ssh $ssh_port_flag "root@$target" '
+        if grep -qiE "(install|updat|upgrad|instaland|actualizand).*(kernel|kernel-core|kernel-modules)-[0-9]" /root/'"$log_name"' 2>/dev/null; then
+            echo "session"
+        elif command -v needs-restarting >/dev/null 2>&1 && ! needs-restarting -r >/dev/null 2>&1; then
+            echo "pending_old:"
+        else
+            echo "none"
+        fi
+    ')
 fi
 
-if [ "$needs_reboot" == "yes" ]; then
-    echo -e "${c_warning}  ⚠️ S'ha actualitzat el Kernel o un servei core i es recomana reiniciar la MV.${c_reset}"
-    echo -ne "  Vols reiniciar el servidor ara mateix? [S/n]: "
+reboot_type=$(echo "$reboot_info" | cut -d: -f1)
+reboot_date=$(echo "$reboot_info" | cut -d: -f2)
+
+if [ "$reboot_type" == "session" ] || [ "$reboot_type" == "pending_old" ]; then
+    if [ "$reboot_type" == "session" ]; then
+        echo -e "${c_warning}  ⚠️ S'ha actualitzat el Kernel o un servei core en aquesta sessió i es recomana reiniciar la MV.${c_reset}"
+        echo -ne "  Vols reiniciar el servidor ara mateix? [S/n]: "
+    else
+        if [ -n "$reboot_date" ]; then
+            echo -e "${c_warning}  ⚠️ No s'ha actualitzat cap paquet nou, però el servidor tenia un reinici pendent previ (fitxer reboot-required del ${reboot_date}).${c_reset}"
+        else
+            echo -e "${c_warning}  ⚠️ No s'ha actualitzat cap paquet nou, però el servidor tenia un reinici pendent previ.${c_reset}"
+        fi
+        echo -ne "  Vols reiniciar el servidor igualment? [S/n]: "
+    fi
     read -r resp_reboot
     
     do_reboot=false
