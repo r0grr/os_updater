@@ -150,30 +150,66 @@ fi
 ssh -t $ssh_port_flag "root@$target" "$update_cmd" | tee >(sed 's/\r$//' > "$local_log_tmp")
 update_exit_code=${PIPESTATUS[0]}
 
-# COMPROVACIÓ D'ERRORS CRÍTICS D'ACTUALITZACIÓ (scriptlets RPM, dpkg errors, etc.)
-update_has_error="no"
-error_reason=""
+# COMPROVACIÓ D'ERRORS I AVISOS D'ACTUALITZACIÓ (scriptlets RPM, dpkg, warnings, etc.)
+clean_log_file="$dest_dir/update_clean.tmp"
+sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r$//' "$local_log_tmp" > "$clean_log_file"
 
+# Extreure errors concrets
+errors_list=$(grep -E -i "(scriptlet failed|Error in POSTTRANS|Error in %posttrans|dpkg: error|(sub-process|subprocess).*error|No space left on device|Transaction failed|grub2-probe: error|grub-install: error|^E: |^Error: |Failed to synchronize cache|GPG check FAILED)" "$clean_log_file" | grep -v -i "No error reported" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | awk '!seen[$0]++')
+
+update_has_error="no"
 if [ $update_exit_code -ne 0 ]; then
     update_has_error="yes"
-    error_reason="La comanda d'actualització ($pkg_mgr) ha retornat un codi d'error ($update_exit_code)."
-elif grep -qE -i "(scriptlet failed|Error in POSTTRANS|Error in %posttrans|dpkg: error|Sub-process .* returned an error|No space left on device|Transaction failed|grub2-probe: error|grub-install: error)" "$local_log_tmp"; then
+    if [ -z "$errors_list" ]; then
+        errors_list="La comanda d'actualització ($pkg_mgr) ha retornat un codi d'error ($update_exit_code)."
+    fi
+elif [ -n "$errors_list" ]; then
     update_has_error="yes"
-    error_reason="S'han detectat errors crítics durant la instal·lació de paquets/scriptlets (RPM/dpkg/dracut/GRUB)."
 fi
+
+# Extreure avisos (warns) concrets, ignorant advertències benignes habituals de sistema
+warnings_list=$(grep -E -i "(^W: |dpkg: warning|^Warning: |^warning: |^WARN: |RPM: warning:|dracut.*WARN)" "$clean_log_file" | grep -v -E -i "(stable CLI interface|os-prober will not be executed|start and stop actions are no longer supported)" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | awk '!seen[$0]++')
+
+update_has_warning="no"
+if [ -n "$warnings_list" ]; then
+    update_has_warning="yes"
+fi
+
+rm -f "$clean_log_file"
 
 if [ "$update_has_error" == "yes" ]; then
     echo -e "\n${c_error}╭─────────────────────────────────────────────────────────────────╮${c_reset}"
     echo -e "${c_error}│ ❌ [ ERROR CRÍTIC D'ACTUALITZACIÓ DETECTAT ]                    │${c_reset}"
     echo -e "${c_error}╰─────────────────────────────────────────────────────────────────╯${c_reset}"
-    echo -e "${c_error}  Motiu: $error_reason${c_reset}"
-    echo -e "${c_warning}  ⚠️  PER SEGURETAT, S'HA BLOQUEJAT EL REINICI I L'AUTOREMOVE DOBLANT LA SEGURETAT.${c_reset}"
+    echo -e "${c_warning}  ⚠️  PER SEGURETAT, S'HA BLOQUEJAT EL REINICI I L'AUTOREMOVE.${c_reset}\n"
+    echo -e "${c_error}  No es permet reiniciar perquè s'han detectat els següents errors:${c_reset}"
+    idx=1
+    while IFS= read -r err_line; do
+        if [ -n "$err_line" ]; then
+            echo -e "  ${c_error}${idx}.${c_reset} $err_line"
+            ((idx++))
+        fi
+    done <<< "$errors_list"
+
+    if [ "$update_has_warning" == "yes" ]; then
+        echo -e "\n${c_warning}  També s'han detectat els següents avisos:${c_reset}"
+        idx=1
+        while IFS= read -r warn_line; do
+            if [ -n "$warn_line" ]; then
+                echo -e "  ${c_warning}${idx}.${c_reset} $warn_line"
+                ((idx++))
+            fi
+        done <<< "$warnings_list"
+    fi
     
     err_log="$dest_dir/${log_name%.txt}_ERROR_ACTUALITZACIO.txt"
     echo "=================================================" > "$err_log"
     echo "   ERROR CRÍTIC DURANT L'ACTUALITZACIÓ DE PAQUETS   " >> "$err_log"
     echo "=================================================" >> "$err_log"
-    echo "Motiu: $error_reason" >> "$err_log"
+    echo -e "\nErrors detectats:\n$errors_list" >> "$err_log"
+    if [ "$update_has_warning" == "yes" ]; then
+        echo -e "\nAvisos detectats:\n$warnings_list" >> "$err_log"
+    fi
     echo -e "\nDiagnòstic previ:" >> "$err_log"
     cat "$diag_pre" >> "$err_log"
     echo -e "\n=================================================" >> "$err_log"
@@ -189,7 +225,41 @@ if [ "$update_has_error" == "yes" ]; then
     exit 1
 fi
 
-echo -e "${c_success}  ✔ Actualització de paquets finalitzada sense errors.${c_reset}"
+if [ "$update_has_warning" == "yes" ]; then
+    echo -e "\n${c_warning}╭─────────────────────────────────────────────────────────────────╮${c_reset}"
+    echo -e "${c_warning}│ ⚠️  [ AVISOS (WARNS) D'ACTUALITZACIÓ DETECTATS ]                 │${c_reset}"
+    echo -e "${c_warning}╰─────────────────────────────────────────────────────────────────╯${c_reset}"
+    echo -e "${c_warning}  ⚠️  PER SEGURETAT, S'HA BLOQUEJAT EL REINICI I L'AUTOREMOVE.${c_reset}\n"
+    echo -e "${c_warning}  No es permet reiniciar perquè s'han detectat els següents avisos:${c_reset}"
+    idx=1
+    while IFS= read -r warn_line; do
+        if [ -n "$warn_line" ]; then
+            echo -e "  ${c_warning}${idx}.${c_reset} $warn_line"
+            ((idx++))
+        fi
+    done <<< "$warnings_list"
+
+    warn_log="$dest_dir/${log_name%.txt}_AVISOS_ACTUALITZACIO.txt"
+    echo "=================================================" > "$warn_log"
+    echo "   AVISOS DETECTATS DURANT L'ACTUALITZACIÓ          " >> "$warn_log"
+    echo "=================================================" >> "$warn_log"
+    echo -e "\nAvisos detectats:\n$warnings_list" >> "$warn_log"
+    echo -e "\nDiagnòstic previ:" >> "$warn_log"
+    cat "$diag_pre" >> "$warn_log"
+    echo -e "\n=================================================" >> "$warn_log"
+    echo "Registre de l'actualització:" >> "$warn_log"
+    cat "$local_log_tmp" >> "$warn_log"
+
+    # Intentar copiar el log remot si existeix
+    scp $scp_port_flag -q "root@${target}:/root/$log_name" "$dest_dir/" 2>/dev/null
+
+    echo -e "\n${c_success}  ✔ S'ha guardat l'informe d'avisos a:${c_reset} $warn_log"
+    echo -e "${c_warning}  📌 Revisa els avisos manualment abans de procedir amb qualsevol reinici.${c_reset}\n"
+    rm -f "$local_log_tmp"
+    exit 1
+fi
+
+echo -e "${c_success}  ✔ Actualització de paquets finalitzada sense errors ni avisos.${c_reset}"
 
 # 3. REINICI SI CAL
 echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
