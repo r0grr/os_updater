@@ -79,8 +79,8 @@ log_input() {
     echo "$1" >> "$target_log"
 }
 
-log "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
-log "${c_accent} 📡 Connectant amb $target...${c_reset}"
+echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
+echo -e "${c_accent} 📡 Connectant amb $target...${c_reset}"
 
 ssh_port_flag=""
 scp_port_flag=""
@@ -104,7 +104,7 @@ if ! timeout 2 bash -c "</dev/tcp/$real_host/$real_port" 2>/dev/null; then
     exit 1
 fi
 
-log "${c_accent} 🔍 Detectant sistema operatiu i host...${c_reset}"
+echo -e "${c_accent} 🔍 Detectant sistema operatiu i host...${c_reset}"
 sleep 1
 # 2. Obtenim tota la info en una sola connexió (super ràpid)
 initial_info=$(ssh $ssh_port_flag -o ConnectTimeout=5 -o BatchMode=yes "root@$target" "hostname; ip=\$(hostname -I 2>/dev/null | awk '{print \$1}'); echo \"\$ip\"; if command -v apt >/dev/null; then echo apt; elif command -v yum >/dev/null; then echo yum; else echo unknown; fi" 2>/dev/null)
@@ -466,24 +466,24 @@ else
 fi
 
 # 6. RECOLLIDA DEL LOG
-log "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
-log "${c_accent} 📥 Descarregant log al teu PC...${c_reset}"
+echo -e "\n${c_dim}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${c_reset}"
+echo -e "${c_accent} 📥 Descarregant log al teu PC...${c_reset}"
 sleep 1
 
 # Esborrem el log temporal del servidor
 ssh $ssh_port_flag "root@$target" "rm -f /root/$log_name" >/dev/null 2>&1
 
-log "    ${c_success}✔${c_reset} $log_name"
-log "${c_success}  ✨ [ ÈXIT ] Log descarregat i eliminat del servidor!${c_reset}"
-log "     ${c_dim}📂 Guardat a:${c_reset} $dest_dir"
+echo -e "    ${c_success}✔${c_reset} $log_name"
+echo -e "${c_success}  ✨ [ ÈXIT ] Log descarregat i eliminat del servidor!${c_reset}"
+echo -e "     ${c_dim}📂 Guardat a:${c_reset} $dest_dir"
 rm -f "$local_log_tmp"
 
 # FI DE PROCÉS I RECORDATORIS MANUALS
-log "\n${c_main}╭──────────────────────────────────────────────────╮${c_reset}"
-log "${c_main}│${c_success}              🎯 PROCÉS COMPLETAT!                ${c_main}│${c_reset}"
-log "${c_main}╰──────────────────────────────────────────────────╯${c_reset}"
+echo -e "\n${c_main}╭──────────────────────────────────────────────────╮${c_reset}"
+echo -e "${c_main}│${c_success}              🎯 PROCÉS COMPLETAT!                ${c_main}│${c_reset}"
+echo -e "${c_main}╰──────────────────────────────────────────────────╯${c_reset}"
 sleep 1
-log "${c_warning}  [ SEGÜENTS PASSOS ]${c_reset}"
-log "  1. Revisar errors a la comparativa i obrir ticket si cal."
-log "  2. Enviar correu al client (plantilla) amb el log adjunt."
-log "  3. Esborrar la Snapshot de Proxmox en 24h.\n"
+echo -e "${c_warning}  [ SEGÜENTS PASSOS ]${c_reset}"
+echo -e "  1. Revisar errors a la comparativa i obrir ticket si cal."
+echo -e "  2. Enviar correu al client (plantilla) amb el log adjunt."
+echo -e "  3. Esborrar la Snapshot de Proxmox en 24h.\n"
