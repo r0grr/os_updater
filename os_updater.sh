@@ -174,39 +174,86 @@ else
     update_cmd="yum update -y 2>&1 | tee /root/$log_name"
 fi
 
-# Usem -t per obrir un terminal interactiu virtual i capturem en directe per si falla el reinici
-ssh -t $ssh_port_flag "root@$target" "$update_cmd" | tee >(sed 's/\r$//' > "$local_log_tmp")
-update_exit_code=${PIPESTATUS[0]}
+while true; do
+    # Usem -t per obrir un terminal interactiu virtual i capturem en directe per si falla el reinici
+    ssh -t $ssh_port_flag "root@$target" "$update_cmd" | tee >(sed 's/\r$//' > "$local_log_tmp")
+    update_exit_code=${PIPESTATUS[0]}
 
-# Afegir sortida neta de l'actualització al log global de la sessió
-sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r$//' "$local_log_tmp" >> "$session_log"
+    # Afegir sortida neta de l'actualització al log global de la sessió
+    sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r$//' "$local_log_tmp" >> "$session_log"
 
-# COMPROVACIÓ D'ERRORS I AVISOS D'ACTUALITZACIÓ (scriptlets RPM, dpkg, warnings, etc.)
-clean_log_file="$dest_dir/update_clean.tmp"
-sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r$//' "$local_log_tmp" > "$clean_log_file"
+    # COMPROVACIÓ D'ERRORS I AVISOS D'ACTUALITZACIÓ (scriptlets RPM, dpkg, warnings, etc.)
+    clean_log_file="$dest_dir/update_clean.tmp"
+    sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r$//' "$local_log_tmp" > "$clean_log_file"
 
-# Extreure errors concrets
-errors_list=$(grep -E -i "(scriptlet failed|Error in POSTTRANS|Error in %posttrans|dpkg: error|(sub-process|subprocess).*error|No space left on device|Transaction failed|grub2-probe: error|grub-install: error|^E: |^Error: |Failed to synchronize cache|GPG check FAILED)" "$clean_log_file" | grep -v -i "No error reported" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | awk '!seen[$0]++')
+    # Extreure errors concrets
+    errors_list=$(grep -E -i "(scriptlet failed|Error in POSTTRANS|Error in %posttrans|dpkg: error|(sub-process|subprocess).*error|No space left on device|Transaction failed|grub2-probe: error|grub-install: error|^E: |^Error: |Failed to synchronize cache|GPG check FAILED)" "$clean_log_file" | grep -v -i "No error reported" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | awk '!seen[$0]++')
 
-update_has_error="no"
-if [ $update_exit_code -ne 0 ]; then
-    update_has_error="yes"
-    if [ -z "$errors_list" ]; then
-        errors_list="La comanda d'actualització ($pkg_mgr) ha retornat un codi d'error ($update_exit_code)."
+    update_has_error="no"
+    if [ $update_exit_code -ne 0 ]; then
+        update_has_error="yes"
+        if [ -z "$errors_list" ]; then
+            errors_list="La comanda d'actualització ($pkg_mgr) ha retornat un codi d'error ($update_exit_code)."
+        fi
+    elif [ -n "$errors_list" ]; then
+        update_has_error="yes"
     fi
-elif [ -n "$errors_list" ]; then
-    update_has_error="yes"
-fi
 
-# Extreure avisos (warns) concrets, ignorant advertències benignes habituals de sistema
-warnings_list=$(grep -E -i "(^W: |dpkg: warning|^Warning: |^warning: |^WARN: |RPM: warning:|dracut.*WARN)" "$clean_log_file" | grep -v -E -i "(stable CLI interface|os-prober will not be executed|start and stop actions are no longer supported)" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | awk '!seen[$0]++')
+    # Comprovació de repositoris inaccessibles o obsolets (ex: WANdisco-git) si hi ha hagut error a yum
+    if [ "$update_has_error" == "yes" ] && [ "$pkg_mgr" == "yum" ]; then
+        broken_repos=$(grep -o -E "(Failed to download metadata for repo|Errors during downloading metadata for repository) '[^']+'" "$clean_log_file" | sed -E "s/.*'([^']+)'.*/\1/" | awk '!seen[$0]++')
+        if [ -z "$broken_repos" ]; then
+            broken_repos=$(grep -o -E "Cannot retrieve (repository metadata|metalink) .* for repository: [^.]+" "$clean_log_file" | awk '{print $NF}' | tr -d '.:' | awk '!seen[$0]++')
+        fi
 
-update_has_warning="no"
-if [ -n "$warnings_list" ]; then
-    update_has_warning="yes"
-fi
+        if [ -n "$broken_repos" ]; then
+            repos_str=$(echo "$broken_repos" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+            log "\n${c_warning}╭─────────────────────────────────────────────────────────────────╮${c_reset}"
+            log "${c_warning}│ ⚠️  [ REPOSITORI INACCESSIBLE O OBSOLET DETECTAT ]              │${c_reset}"
+            log "${c_warning}╰─────────────────────────────────────────────────────────────────╯${c_reset}"
+            log "  ${c_warning}⚠️  S'ha detectat un repositori inaccessible o obsolet: ${c_main}${repos_str}${c_reset}"
+            log_prompt "  Vols deshabilitar-lo automàticament i reintentar l'actualització? [S/n]: "
+            read -r resp_fix_repo
+            log_input "$resp_fix_repo"
 
-rm -f "$clean_log_file"
+            if [[ ! "$resp_fix_repo" =~ ^[Nn] ]]; then
+                log "\n${c_accent}  🔧 Comandes que s'executaran:${c_reset}"
+                log "  ${c_main}1.${c_reset} yum-config-manager --disable $repos_str"
+                log "  ${c_main}2.${c_reset} yum clean all"
+                log "  ${c_main}3.${c_reset} yum update -y\n"
+                sleep 1
+
+                log "${c_accent}▶ 1. Deshabilitant repositori: $repos_str...${c_reset}"
+                disable_remote_cmd="if command -v yum-config-manager >/dev/null 2>&1; then yum-config-manager --disable $repos_str; else for r in $repos_str; do sed -i -E \"/^\\[\$r\\]/,/^\\[/ s/^enabled=[0-9]+/enabled=0/g\" /etc/yum.repos.d/*.repo; done; echo \"Deshabilitat mitjançant fitxers .repo\"; fi"
+                ssh -t $ssh_port_flag "root@$target" "$disable_remote_cmd" 2>&1 | tee >(sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r$//' >> "$session_log")
+
+                log "\n${c_accent}▶ 2. Netejant memòria cau (yum clean all)...${c_reset}"
+                ssh -t $ssh_port_flag "root@$target" "yum clean all" 2>&1 | tee >(sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r$//' >> "$session_log")
+
+                log "\n${c_accent}▶ 3. Reintentant actualització (yum update -y)...${c_reset}\n"
+                rm -f "$clean_log_file"
+                continue
+            else
+                log "\n${c_warning}  ⚠️  S'atura el procés d'actualització per decisió de l'usuari.${c_reset}"
+                log "  Si us plau, revisa i repara el repositori manualment al servidor."
+                log "  Un cop arreglat, torna a executar aquest script per actualitzar el sistema.\n"
+                rm -f "$clean_log_file" "$local_log_tmp"
+                exit 1
+            fi
+        fi
+    fi
+
+    # Extreure avisos (warns) concrets, ignorant advertències benignes habituals de sistema
+    warnings_list=$(grep -E -i "(^W: |dpkg: warning|^Warning: |^warning: |^WARN: |RPM: warning:|dracut.*WARN)" "$clean_log_file" | grep -v -E -i "(stable CLI interface|os-prober will not be executed|start and stop actions are no longer supported)" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | awk '!seen[$0]++')
+
+    update_has_warning="no"
+    if [ -n "$warnings_list" ]; then
+        update_has_warning="yes"
+    fi
+
+    rm -f "$clean_log_file"
+    break
+done
 
 if [ "$update_has_error" == "yes" ]; then
     log "\n${c_error}╭─────────────────────────────────────────────────────────────────╮${c_reset}"
