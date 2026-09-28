@@ -145,10 +145,10 @@ sleep 1
 diag_pre="/tmp/diag_pre_${target}.txt"
 
 if [ "$pkg_mgr" == "apt" ]; then
-    pkg_mgr_check="apt update >/dev/null 2>&1 && apt list --upgradable 2>/dev/null"
+    pkg_mgr_check="apt-get clean >/dev/null 2>&1; apt update >/dev/null 2>&1 && apt list --upgradable 2>/dev/null"
     netstat_flags="-ntlepu"
 else
-    pkg_mgr_check="yum check-update 2>/dev/null"
+    pkg_mgr_check="yum clean metadata >/dev/null 2>&1; yum check-update 2>/dev/null"
     netstat_flags="-ntlep"
 fi
 
